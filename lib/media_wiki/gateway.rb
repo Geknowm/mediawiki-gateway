@@ -334,8 +334,11 @@ module MediaWiki
          'blnamespace' => '0',
          'bllimit' => 500 }
       res, blcontinue = make_api_request(form_data)
-      count = res.xpath("//bl").count
-      maxid = res.xpath("//bl").last["pageid"].to_i
+
+      backlinks = res.xpath("//bl")
+      count = backlinks.count
+      maxid = backlinks.blank? ? nil : backlinks.last["pageid"].to_i
+
       return [count, maxid]
     end
 
