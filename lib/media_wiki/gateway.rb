@@ -1,15 +1,11 @@
-require 'rubygems'
-require 'logger'
 require 'rest_client'
-require 'rexml/document'
 require 'uri'
 require 'active_support'
+require 'nokogiri'
 
 module MediaWiki
 
   class Gateway
-    attr_reader :log
-
     # Set up a MediaWiki::Gateway for a given MediaWiki installation
     #
     # [url] Path to API of target MediaWiki (eg. "http://en.wikipedia.org/w/api.php")
@@ -28,17 +24,13 @@ module MediaWiki
       default_options = {
         :bot => false,
         :limit => 500,
-        :logdevice => STDERR,
-        :loglevel => Logger::WARN,
         :maxlag => 5,
         :retry_count => 3,
         :retry_delay => 10,
       }
       @options = default_options.merge(options)
       @wiki_url = url
-      @log = Logger.new(@options[:logdevice])
-      @log.level = @options[:loglevel]
-      @headers = { "User-Agent" => "MediaWiki::Gateway/#{MediaWiki::VERSION}", "Accept-Encoding" => "gzip" }
+      @headers = { "User-Agent" => "MediaWiki::Gateway/0", "Accept-Encoding" => "gzip" } # TODO fix version number
       @cookies = {}
     end
 
@@ -103,22 +95,35 @@ module MediaWiki
       options.keys.each{|opt| raise ArgumentError.new("Unknown option '#{opt}'") unless valid_options.include?(opt.to_s)}
 
       rendered = nil
-      parsed = make_api_request(form_data).first.elements["parse"]
-      if parsed.attributes["revid"] != '0'
-        rendered = parsed.elements["text"].text.gsub(/<!--(.|\s)*?-->/, '')
-        # OPTIMIZE: unifiy the keys in +options+ like symbolize_keys! but w/o
-        if options["linkbase"] or options[:linkbase]
-          linkbase = options["linkbase"] || options[:linkbase]
-          rendered = rendered.gsub(/\shref="\/wiki\/([\w\(\)_\-\.%\d:,]*)"/, ' href="' + linkbase + '/wiki/\1"')
-        end
-        if options["noeditsections"] or options[:noeditsections]
-          rendered = rendered.gsub(/<span class="editsection">\[.+\]<\/span>/, '')
-        end
-        if options["noimages"] or options[:noimages]
-          rendered = rendered.gsub(/<img.*\/>/, '')
-        end
+      parsed = make_api_request(form_data).root.xpath('//parse')
+      rendered = parsed.xpath('//text').text
+      # OPTIMIZE: unifiy the keys in +options+ like symbolize_keys! but w/o
+      if options["linkbase"] or options[:linkbase]
+        linkbase = options["linkbase"] || options[:linkbase]
+        rendered = rendered.gsub(/\shref="\/wiki\/([\w\(\)_\-\.%\d:,]*)"/, ' href="' + linkbase + '/wiki/\1"')
+      end
+      if options["noeditsections"] or options[:noeditsections]
+        rendered = rendered.gsub(/<span class="editsection">\[.+\]<\/span>/, '')
+      end
+      if options["noimages"] or options[:noimages]
+        rendered = rendered.gsub(/<img.*\/>/, '')
       end
       rendered
+    end
+
+    def summary(page_title)
+      form_data = {'action' => 'query', 'titles' => page_title, 'prop' => 'extracts', 'exintro' => true}
+      summary_html = Nokogiri::HTML make_api_request(form_data).xpath('//extract').text
+
+      if first_par = summary_html.xpath('//p')[0]
+        summary = first_par.inner_html
+        if summary.split(' ')[0] == 'Coordinates:'
+          summary = summay_html.xpath('//p')[1].inner_html
+        end
+      else
+        summary = ""
+      end
+      summary
     end
 
     # Create a new page, or overwrite an existing one
@@ -270,7 +275,7 @@ module MediaWiki
           'aplimit' => @options[:limit],
           'apnamespace' => namespace})
         res, apfrom = make_api_request(form_data, '//query-continue/allpages/@apfrom')
-        titles += REXML::XPath.match(res, "//p").map { |x| x.attributes["title"] }
+        titles += res.xpath("//p").map { |x| x.attributes["title"] }
       end while apfrom
       titles
     end
@@ -288,11 +293,10 @@ module MediaWiki
         form_data = options.merge(
           {'action' => 'query',
           'list' => 'categorymembers',
-          'apfrom' => apfrom,
           'cmtitle' => category,
           'cmlimit' => @options[:limit]})
         res, apfrom = make_api_request(form_data, '//query-continue/categorymembers/@apfrom')
-        titles += REXML::XPath.match(res, "//cm").map { |x| x.attributes["title"] }
+        titles += res.xpath("//cm").map { |x| x["title"] }
       end while apfrom
       titles
     end
@@ -315,7 +319,7 @@ module MediaWiki
           'bllimit' => @options[:limit] }
         form_data['blcontinue'] = blcontinue if blcontinue
         res, blcontinue = make_api_request(form_data, '//query-continue/backlinks/@blcontinue')
-        titles += REXML::XPath.match(res, "//bl").map { |x| x.attributes["title"] }
+        titles += res.xpath("//bl").map { |x| x.attributes["title"] }
       end while blcontinue
       titles
     end
@@ -345,7 +349,7 @@ module MediaWiki
       begin
         form_data['sroffset'] = offset if offset
         res, offset = make_api_request(form_data, '//query-continue/search/@sroffset')
-        titles += REXML::XPath.match(res, "//p").map { |x| x.attributes["title"] }
+        titles += res.xpath("//p").map { |x| x.attributes["title"] }
       end while offset
       titles
     end
@@ -365,7 +369,7 @@ module MediaWiki
           'aufrom' => aufrom,
           'aulimit' => @options[:limit]})
         res, aufrom = make_api_request(form_data, '//query-continue/allusers/@aufrom')
-        names += REXML::XPath.match(res, "//u").map { |x| x.attributes["name"] }
+        names += res.xpath("//u").map { |x| x.attributes["name"] }
       end while aufrom
       names
     end
@@ -389,7 +393,7 @@ module MediaWiki
           'ucstart' => ucstart,
           'uclimit' => limit})
         res, ucstart = make_api_request(form_data, '//query-continue/usercontribs/@ucstart')
-        result += REXML::XPath.match(res, "//item").map { |x| x.attributes.inject({}) { |hash, data| hash[data.first] = data.last; hash } }
+        result += res.xpath("//item").map { |x| x.attributes.inject({}) { |hash, data| hash[data.first] = data.last; hash } }
         break if count and result.size >= count
       end while ucstart
       result
@@ -517,9 +521,9 @@ module MediaWiki
       end
 
       xml, dummy = make_api_request(form_data)
-      page = xml.elements["query/pages/page"]
+      page = xml["query/pages/page"]
       if valid_page? page
-        if xml.elements["query/redirects/r"]
+        if xml["query/redirects/r"]
           # We're dealing with redirect here.
           image_info(page.attributes["pageid"].to_i, options)
         else
@@ -575,7 +579,7 @@ module MediaWiki
     def namespaces_by_prefix
       form_data = { 'action' => 'query', 'meta' => 'siteinfo', 'siprop' => 'namespaces' }
       res = make_api_request(form_data)
-      REXML::XPath.match(res, "//ns").inject(Hash.new) do |namespaces, namespace|
+      res.xpath("//ns").inject(Hash.new) do |namespaces, namespace|
         prefix = namespace.attributes["canonical"] || ""
         namespaces[prefix] = namespace.attributes["id"].to_i
         namespaces
@@ -588,7 +592,7 @@ module MediaWiki
     def extensions
       form_data = { 'action' => 'query', 'meta' => 'siteinfo', 'siprop' => 'extensions' }
       res = make_api_request(form_data)
-      REXML::XPath.match(res, "//ext").inject(Hash.new) do |extensions, extension|
+      res.xpath("//ext").inject(Hash.new) do |extensions, extension|
         name = extension.attributes["name"] || ""
         extensions[name] = extension.attributes["version"]
         extensions
@@ -615,21 +619,21 @@ module MediaWiki
     #
     # Returns result as an HTML string
     def semantic_query(query, params = [])
-			if extensions.include? 'Semantic MediaWiki'
-				smw_version = extensions['Semantic MediaWiki'].to_f
-				if smw_version >= 1.7
-					form_data = { 'action' => 'ask', 'query' => "#{query}|#{params.join('|')}"}
-					xml, dummy = make_api_request(form_data)
-					return xml
-				else
-					params << "format=list"
-					form_data = { 'action' => 'parse', 'prop' => 'text', 'text' => "{{#ask:#{query}|#{params.join('|')}}}" }
-					xml, dummy = make_api_request(form_data)
-					return xml.elements["parse/text"].text
-				end
-			else
-				raise MediaWiki::Exception.new "Semantic MediaWiki extension not installed."
-			end
+      if extensions.include? 'Semantic MediaWiki'
+        smw_version = extensions['Semantic MediaWiki'].to_f
+        if smw_version >= 1.7
+          form_data = { 'action' => 'ask', 'query' => "#{query}|#{params.join('|')}"}
+          xml, dummy = make_api_request(form_data)
+          return xml
+        else
+          params << "format=list"
+          form_data = { 'action' => 'parse', 'prop' => 'text', 'text' => "{{#ask:#{query}|#{params.join('|')}}}" }
+          xml, dummy = make_api_request(form_data)
+          return xml["parse/text"].text
+        end
+      else
+        raise MediaWiki::Exception.new "Semantic MediaWiki extension not installed."
+      end
     end
 
     # Set groups for a user
@@ -648,14 +652,13 @@ module MediaWiki
     # [flags] Hash of flags and values to set, eg. { "accuracy" => "1", "depth" => "2" }
     # [comment] Comment to add to review (optional)
     def review(title, flags, comment = "Reviewed by MediaWiki::Gateway")
-      raise APIError.new('missingtitle', "Article #{title} not found") unless revid = revision(title)
+      #raise APIError.new('missingtitle', "Article #{title} not found") unless revid = revision(title)
       form_data = {'action' => 'review', 'revid' => revid, 'token' => get_token('edit', title), 'comment' => comment}
       form_data.merge!( Hash[flags.map {|k,v| ["flag_#{k}", v]}] )
       res, dummy = make_api_request(form_data)
       res
     end
 
-    private
 
     # Fetch token (type 'delete', 'edit', 'email', 'import', 'move', 'protect')
     def get_token(type, page_titles)
@@ -684,10 +687,9 @@ module MediaWiki
       res, dummy = make_api_request(form_data)
       token = res.elements["query/users/user"].attributes["userrightstoken"]
 
-      @log.debug("RESPONSE: #{res.to_s}")
       if token.nil?
         if res.elements["query/users/user"].attributes["missing"]
-          raise APIError.new('invaliduser', "User '#{user}' was not found (get_userrights_token)")
+          #raise APIError.new('invaliduser', "User '#{user}' was not found (get_userrights_token)")
         else
           raise Unauthorized.new "User '#{@username}' is not permitted to perform this operation: get_userrights_token"
         end
@@ -755,12 +757,11 @@ module MediaWiki
       end
       http_send(@wiki_url, form_data, @headers.merge({:cookies => @cookies})) do |response, &block|
         if response.code == 503 and retry_count < @options[:retry_count]
-          log.warn("503 Service Unavailable: #{response.body}.  Retry in #{@options[:retry_delay]} seconds.")
           sleep @options[:retry_delay]
           make_api_request(form_data, continue_xpath, retry_count + 1)
         end
         # Check response for errors and return XML
-        raise MediaWiki::Exception.new "Bad response: #{response}" unless response.code >= 200 and response.code < 300
+        #raise MediaWiki::Exception.new "Bad response: #{response}" unless response.code >= 200 and response.code < 300
         doc = get_response(response.dup)
         if(form_data['action'] == 'login')
           login_result = doc.elements["login"].attributes['result']
@@ -771,19 +772,18 @@ module MediaWiki
             else raise Unauthorized.new "Login failed: " + login_result
           end
         end
-        continue = (continue_xpath and doc.elements['query-continue']) ? REXML::XPath.first(doc, continue_xpath).value : nil
-        return [doc, continue]
+        #continue = (continue_xpath and doc.elements['query-continue']) ? REXML::XPath.first(doc, continue_xpath).value : nil
+        #return [doc, continue]
+        return doc
       end
     end
 
     # Execute the HTTP request using either GET or POST as appropriate
     def http_send url, form_data, headers, &block
       if form_data['action'] == 'query'
-        log.debug("GET: #{form_data.inspect}, #{@cookies.inspect}")
         headers[:params] = form_data
         RestClient.get url, headers, &block
       else
-        log.debug("POST: #{form_data.inspect}, #{@cookies.inspect}")
         RestClient.post url, form_data, headers, &block
       end
     end
@@ -792,42 +792,27 @@ module MediaWiki
     # If there are errors or warnings, raise APIError
     # Otherwise return XML root
     def get_response(res)
-      begin
-        res = res.force_encoding("UTF-8") if res.respond_to?(:force_encoding)
-        doc = REXML::Document.new(res).root
-      rescue REXML::ParseException => e
-        raise MediaWiki::Exception.new "Response is not XML.  Are you sure you are pointing to api.php?"
-      end
-      log.debug("RES: #{doc}")
-      raise MediaWiki::Exception.new "Response does not contain Mediawiki API XML: #{res}" unless [ "api", "mediawiki" ].include? doc.name
-      if doc.elements["error"]
-        code = doc.elements["error"].attributes["code"]
-        info = doc.elements["error"].attributes["info"]
-        raise APIError.new(code, info)
-      end
-      if doc.elements["warnings"]
-        warning("API warning: #{doc.elements["warnings"].children.map {|e| e.text}.join(", ")}")
-      end
-      doc
+      res = res.force_encoding("UTF-8") if res.respond_to?(:force_encoding)
+      doc = Nokogiri::XML res
     end
 
     def valid_page?(page)
       return false unless page
       return false if page.attributes["missing"]
       if page.attributes["invalid"]
-        warning("Invalid title '#{page.attributes["title"]}'")
+        #warning("Invalid title '#{page.attributes["title"]}'")
       else
         true
       end
     end
 
-    def warning(msg)
-      if @options[:ignorewarnings]
-        log.warn(msg)
-        return false
-      else
-        raise APIError.new('warning', msg)
-      end
-    end
+    #def warning(msg)
+    #  if @options[:ignorewarnings]
+    #    return false
+    #  else
+    #    raise APIError.new('warning', msg)
+    #  end
+    #end
   end
 end
+

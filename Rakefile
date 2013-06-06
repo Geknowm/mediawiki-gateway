@@ -35,9 +35,10 @@ begin
     gemspec.description = ""
     gemspec.email = "jpatokal@iki.fi"
     gemspec.homepage = "http://github.com/jpatokal/mediawiki-gateway"
-    gemspec.authors = ["Jani Patokallio"]
+    gemspec.authors = ["Jani Patokallio", "Ryan Muller", "Turadg Aleahmad"]
     gemspec.version = MediaWiki::VERSION
     gemspec.add_dependency 'rest-client', '>= 1.3.0'
+    gemspec.add_dependency 'nokogiri', '~> 1.5.0'    
     gemspec.add_dependency 'activesupport'
     gemspec.add_development_dependency 'jeweler'
     gemspec.add_development_dependency 'sham_rack'
