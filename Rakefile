@@ -2,7 +2,9 @@ require 'thread'
 require 'rake'
 require "rubygems/package_task"
 require 'rdoc/task'
-require 'spec/rake/spectask'
+require "spec/rake/spectask"  # RSpec 1.3
+
+$LOAD_PATH.unshift(File.dirname(__FILE__))
 require 'lib/media_wiki'
 
 task :default => ['spec']
@@ -21,9 +23,7 @@ end
 desc "Run all specs"
 Spec::Rake::SpecTask.new('spec') do |t|
   t.spec_files = FileList['spec/**/*.rb']
-  t.spec_opts = ['--debugger']
-  t.rcov = true
-  t.rcov_opts = ['--exclude', 'spec,gems']
+  t.spec_opts = ['--backtrace']
 end
 
 
@@ -41,11 +41,9 @@ begin
     gemspec.add_dependency 'activesupport'
     gemspec.add_development_dependency 'jeweler'
     gemspec.add_development_dependency 'sham_rack'
-    gemspec.add_development_dependency 'rr'
-    gemspec.add_development_dependency 'rcov'
+    gemspec.add_development_dependency 'rr', "~> 0.10.0"
     gemspec.add_development_dependency 'rspec', '~> 1.3'
-    gemspec.add_development_dependency 'ruby-debug'
-    gemspec.add_development_dependency 'sinatra'
+    gemspec.add_development_dependency 'sinatra', '~> 1.1.0'
     gemspec.add_development_dependency 'activemodel'
   end
 rescue LoadError
