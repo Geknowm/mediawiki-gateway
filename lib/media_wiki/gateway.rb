@@ -325,6 +325,20 @@ module MediaWiki
       titles
     end
 
+    def document_frequency_data(title)
+      form_data =
+        {'action' => 'query',
+         'list' => 'backlinks',
+         'bltitle' => title,
+         'blfilterredir' => 'nonredirects',
+         'blnamespace' => '0',
+         'bllimit' => 500 }
+      res, blcontinue = make_api_request(form_data)
+      count = res.xpath("//bl").count
+      maxid = res.xpath("//bl").last["pageid"].to_i
+      return [count, maxid]
+    end
+
     # Get a list of pages with matching content in given namespaces
     #
     # [key] Search key
