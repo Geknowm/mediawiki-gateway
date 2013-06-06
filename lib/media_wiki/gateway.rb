@@ -72,7 +72,7 @@ module MediaWiki
       form_data = {'action' => 'query', 'prop' => 'revisions', 'rvprop' => 'ids', 'rvlimit' => 1, 'titles' => page_title}
       page = make_api_request(form_data).first.elements["query/pages/page"]
       if valid_page? page
-        page.elements["revisions/rev"].attributes["revid"]
+        page.elements["revisions/rev"]["revid"]
       end
     end
 
@@ -249,7 +249,7 @@ module MediaWiki
       token = get_undelete_token(title)
       if token
         form_data = {'action' => 'undelete', 'title' => title, 'token' => token }
-        make_api_request(form_data).first.elements["undelete"].attributes["revisions"].to_i
+        make_api_request(form_data).first.elements["undelete"]["revisions"].to_i
       else
         0 # No revisions to undelete
       end
@@ -275,7 +275,7 @@ module MediaWiki
           'aplimit' => @options[:limit],
           'apnamespace' => namespace})
         res, apfrom = make_api_request(form_data, '//query-continue/allpages/@apfrom')
-        titles += res.xpath("//p").map { |x| x.attributes["title"] }
+        titles += res.xpath("//p").map { |x| x["title"] }
       end while apfrom
       titles
     end
@@ -319,7 +319,7 @@ module MediaWiki
           'bllimit' => @options[:limit] }
         form_data['blcontinue'] = blcontinue if blcontinue
         res, blcontinue = make_api_request(form_data, '//query-continue/backlinks/@blcontinue')
-        titles += res.xpath("//bl").map { |x| x.attributes["title"] }
+        titles += res.xpath("//bl").map { |x| x["title"] }
       end while blcontinue
       titles
     end
@@ -349,7 +349,7 @@ module MediaWiki
       begin
         form_data['sroffset'] = offset if offset
         res, offset = make_api_request(form_data, '//query-continue/search/@sroffset')
-        titles += res.xpath("//p").map { |x| x.attributes["title"] }
+        titles += res.xpath("//p").map { |x| x["title"] }
       end while offset
       titles
     end
@@ -369,7 +369,7 @@ module MediaWiki
           'aufrom' => aufrom,
           'aulimit' => @options[:limit]})
         res, aufrom = make_api_request(form_data, '//query-continue/allusers/@aufrom')
-        names += res.xpath("//u").map { |x| x.attributes["name"] }
+        names += res.xpath("//u").map { |x| x["name"] }
       end while aufrom
       names
     end
@@ -393,7 +393,7 @@ module MediaWiki
           'ucstart' => ucstart,
           'uclimit' => limit})
         res, ucstart = make_api_request(form_data, '//query-continue/usercontribs/@ucstart')
-        result += res.xpath("//item").map { |x| x.attributes.inject({}) { |hash, data| hash[data.first] = data.last; hash } }
+        result += res.xpath("//item").map { |x| x.inject({}) { |hash, data| hash[data.first] = data.last; hash } }
         break if count and result.size >= count
       end while ucstart
       result
@@ -475,7 +475,7 @@ module MediaWiki
     def redirect?(page_title)
       form_data = {'action' => 'query', 'prop' => 'info', 'titles' => page_title}
       page = make_api_request(form_data).first.elements["query/pages/page"]
-      !!(valid_page?(page) and page.attributes["redirect"])
+      !!(valid_page?(page) and page["redirect"])
     end
 
     # Requests image info from MediaWiki. Follows redirects.
@@ -525,9 +525,9 @@ module MediaWiki
       if valid_page? page
         if xml["query/redirects/r"]
           # We're dealing with redirect here.
-          image_info(page.attributes["pageid"].to_i, options)
+          image_info(page["pageid"].to_i, options)
         else
-          page.elements["imageinfo/ii"].attributes
+          page["imageinfo/ii"]
         end
       else
         nil
@@ -580,8 +580,8 @@ module MediaWiki
       form_data = { 'action' => 'query', 'meta' => 'siteinfo', 'siprop' => 'namespaces' }
       res = make_api_request(form_data)
       res.xpath("//ns").inject(Hash.new) do |namespaces, namespace|
-        prefix = namespace.attributes["canonical"] || ""
-        namespaces[prefix] = namespace.attributes["id"].to_i
+        prefix = namespace["canonical"] || ""
+        namespaces[prefix] = namespace["id"].to_i
         namespaces
       end
     end
@@ -593,8 +593,8 @@ module MediaWiki
       form_data = { 'action' => 'query', 'meta' => 'siteinfo', 'siprop' => 'extensions' }
       res = make_api_request(form_data)
       res.xpath("//ext").inject(Hash.new) do |extensions, extension|
-        name = extension.attributes["name"] || ""
-        extensions[name] = extension.attributes["version"]
+        name = extension["name"] || ""
+        extensions[name] = extension["version"]
         extensions
       end
     end
@@ -609,7 +609,7 @@ module MediaWiki
     def email_user(user, subject, text)
       form_data = { 'action' => 'emailuser', 'target' => user, 'subject' => subject, 'text' => text, 'token' => get_token('email', "User:" + user) }
       res, dummy = make_api_request(form_data)
-      res.elements['emailuser'].attributes['result'] == 'Success'
+      res.elements['emailuser']['result'] == 'Success'
     end
 
     # Execute Semantic Mediawiki query
@@ -664,7 +664,7 @@ module MediaWiki
     def get_token(type, page_titles)
       form_data = {'action' => 'query', 'prop' => 'info', 'intoken' => type, 'titles' => page_titles}
       res, dummy = make_api_request(form_data)
-      token = res.elements["query/pages/page"].attributes[type + "token"]
+      token = res.elements["query/pages/page"][type + "token"]
       raise Unauthorized.new "User is not permitted to perform this operation: #{type}" if token.nil?
       token
     end
@@ -673,7 +673,7 @@ module MediaWiki
       form_data = {'action' => 'query', 'list' => 'deletedrevs', 'prop' => 'info', 'drprop' => 'token', 'titles' => page_titles}
       res, dummy = make_api_request(form_data)
       if res.elements["query/deletedrevs/page"]
-        token = res.elements["query/deletedrevs/page"].attributes["token"]
+        token = res.elements["query/deletedrevs/page"]["token"]
         raise Unauthorized.new "User is not permitted to perform this operation: #{type}" if token.nil?
         token
       else
@@ -685,10 +685,10 @@ module MediaWiki
     def get_userrights_token(user)
       form_data = {'action' => 'query', 'list' => 'users', 'ustoken' => 'userrights', 'ususers' => user}
       res, dummy = make_api_request(form_data)
-      token = res.elements["query/users/user"].attributes["userrightstoken"]
+      token = res.elements["query/users/user"]["userrightstoken"]
 
       if token.nil?
-        if res.elements["query/users/user"].attributes["missing"]
+        if res.elements["query/users/user"]["missing"]
           #raise APIError.new('invaliduser', "User '#{user}' was not found (get_userrights_token)")
         else
           raise Unauthorized.new "User '#{@username}' is not permitted to perform this operation: get_userrights_token"
@@ -764,11 +764,11 @@ module MediaWiki
         #raise MediaWiki::Exception.new "Bad response: #{response}" unless response.code >= 200 and response.code < 300
         doc = get_response(response.dup)
         if(form_data['action'] == 'login')
-          login_result = doc.elements["login"].attributes['result']
+          login_result = doc.elements["login"]['result']
           @cookies.merge!(response.cookies)
           case login_result
             when "Success" then # do nothing
-            when "NeedToken" then make_api_request(form_data.merge('lgtoken' => doc.elements["login"].attributes["token"]))
+            when "NeedToken" then make_api_request(form_data.merge('lgtoken' => doc.elements["login"]["token"]))
             else raise Unauthorized.new "Login failed: " + login_result
           end
         end
