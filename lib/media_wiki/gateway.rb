@@ -307,7 +307,7 @@ module MediaWiki
     # [filter] "all" links (default), "redirects" only, or "nonredirects" (plain links only)
     #
     # Returns array of page titles (empty if no matches)
-    def backlinks(title, filter = "all")
+    def backlinks(title, filter = "all", namespace = nil)
       titles = []
       blcontinue = nil
       begin
@@ -317,6 +317,7 @@ module MediaWiki
           'bltitle' => title,
           'blfilterredir' => filter,
           'bllimit' => @options[:limit] }
+        form_data['blnamespace'] = namespace if namespace
         form_data['blcontinue'] = blcontinue if blcontinue
         res, blcontinue = make_api_request(form_data, '//query-continue/backlinks/@blcontinue')
         titles += res.xpath("//bl").map { |x| x["title"] }
