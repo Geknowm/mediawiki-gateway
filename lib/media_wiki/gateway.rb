@@ -118,7 +118,7 @@ module MediaWiki
       if first_par = summary_html.xpath('//p')[0]
         summary = first_par.inner_html
         if summary.split(' ')[0] == 'Coordinates:'
-          summary = summay_html.xpath('//p')[1].inner_html
+          summary = summary_html.xpath('//p')[1].inner_html
         end
       else
         summary = ""
