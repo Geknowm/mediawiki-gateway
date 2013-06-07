@@ -112,7 +112,7 @@ module MediaWiki
     end
 
     def summary(page_title)
-      form_data = {'action' => 'query', 'titles' => page_title, 'prop' => 'extracts', 'exintro' => true}
+      form_data = {'action' => 'query', 'titles' => page_title, 'prop' => 'extracts', 'exintro' => true, 'redirects' => false}
       summary_html = Nokogiri::HTML make_api_request(form_data).xpath('//extract').text
 
       if first_par = summary_html.xpath('//p')[0]
