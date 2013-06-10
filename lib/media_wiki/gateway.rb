@@ -126,6 +126,12 @@ module MediaWiki
       summary
     end
 
+    def page_image_url(page_title)
+      form_data = { 'action' => 'query', 'titles' => page_title, 'prop' => 'pageprops', 'redirects' => false }
+      image_title = make_api_request(form_data).xpath('//pageprops').first['page_image']
+      return image_info(image_title, {'iiprop' => 'url', 'iiurlwidth' => 640})['thumburl']
+    end
+
     # Create a new page, or overwrite an existing one
     #
     # [title] Page title to create or overwrite, string
@@ -539,13 +545,14 @@ module MediaWiki
       end
 
       xml, dummy = make_api_request(form_data)
-      page = xml["query/pages/page"]
+      page = xml.xpath("//query/pages/page").first
       if valid_page? page
-        if xml["query/redirects/r"]
+        unless xml.xpath("//query/redirects/r").empty?
           # We're dealing with redirect here.
           image_info(page["pageid"].to_i, options)
         else
-          page["imageinfo/ii"]
+          info = page.xpath("imageinfo/ii").first
+          Hash[info.keys.zip(info.values)]
         end
       else
         nil
@@ -816,8 +823,9 @@ module MediaWiki
 
     def valid_page?(page)
       return false unless page
-      return false if page.attributes["missing"]
-      if page.attributes["invalid"]
+      #return false if page["missing"]
+      if page["invalid"]
+        false
         #warning("Invalid title '#{page.attributes["title"]}'")
       else
         true
