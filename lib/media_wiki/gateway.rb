@@ -126,6 +126,18 @@ module MediaWiki
       summary
     end
 
+    def categories(page_title)
+      form_data = {
+        'action' => 'query',
+        'titles' => page_title,
+        'prop' => 'categories',
+        'clshow' => '!hidden',
+        'cllimit' => 100
+       }
+
+       return make_api_request(form_data).xpath('//cl').map { |cl| cl['title'] }
+    end
+
     def page_image_url(page_title)
       form_data = { 'action' => 'query', 'titles' => page_title, 'prop' => 'pageprops', 'redirects' => false }
       image_title = make_api_request(form_data).xpath('//pageprops').first['page_image']
