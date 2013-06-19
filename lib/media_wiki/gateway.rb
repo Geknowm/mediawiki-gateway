@@ -138,6 +138,18 @@ module MediaWiki
        return make_api_request(form_data).xpath('//cl').map { |cl| cl['title'] }
     end
 
+    def links(page_title)
+      form_data = {
+        'action' => 'query',
+        'titles' => page_title,
+        'prop' => 'links',
+        'plnamespace' => 0,
+        'pllimit' => 500
+      }
+
+      return make_api_request(form_data).xpath('//pl').map { |pl| pl['title'] }
+    end
+
     def page_image_url(page_title)
       form_data = { 'action' => 'query', 'titles' => page_title, 'prop' => 'pageprops', 'redirects' => false }
       props = make_api_request(form_data).xpath('//pageprops')
