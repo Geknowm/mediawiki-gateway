@@ -140,7 +140,9 @@ module MediaWiki
 
     def page_image_url(page_title)
       form_data = { 'action' => 'query', 'titles' => page_title, 'prop' => 'pageprops', 'redirects' => false }
-      image_title = make_api_request(form_data).xpath('//pageprops').first['page_image']
+      props = make_api_request(form_data).xpath('//pageprops')
+      return nil if props.empty? 
+      image_title = props.first['page_image']
       return image_info(image_title, {'iiprop' => 'url', 'iiurlwidth' => 640})['thumburl'] rescue nil
     end
 
