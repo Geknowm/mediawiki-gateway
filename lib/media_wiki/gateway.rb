@@ -132,7 +132,8 @@ module MediaWiki
         'titles' => page_title,
         'prop' => 'categories',
         'clshow' => '!hidden',
-        'cllimit' => 100
+        'cllimit' => 100,
+        'redirects' => ''
        }
 
        return make_api_request(form_data).xpath('//cl').map { |cl| cl['title'] }
